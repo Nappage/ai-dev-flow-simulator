@@ -1,213 +1,259 @@
-            .sort((a, b) => {
-                const priorityOrder = { critical: 0, high: 1, medium: 2, low: 3 };
-                return priorityOrder[a.priority] - priorityOrder[b.priority];
-            });
+// タスクの状態定義の拡張
+const TaskStatus = {
+    PENDING: 'pending',
+    ANALYZING: 'analyzing',
+    IN_PROGRESS: 'in_progress',
+    IN_REVIEW: 'in_review',
+    REVIEW_FEEDBACK: 'review_feedback',
+    BUILD_PENDING: 'build_pending',
+    BUILDING: 'building',
+    TESTING: 'testing',
+    DEPLOY_PENDING: 'deploy_pending',
+    DEPLOYING: 'deploying',
+    BLOCKED: 'blocked',
+    COMPLETED: 'completed',
+    FAILED: 'failed'
+};
 
-        // アクティブタスクの更新とリソース使用量の計算
-        this.tasks.forEach(task => {
-            if (task.status === TaskStatus.IN_PROGRESS || 
-                task.status === TaskStatus.ANALYZING) {
-                activeCount++;
-                this.systemResources.cpu += task.resourceRequirements.cpu;
-                this.systemResources.memory += task.resourceRequirements.memory;
-                usedDevelopers += task.resourceRequirements.developers;
-                
-                // タスクの進捗更新
-                if (task.updateProgress(deltaTime * this.getProgressRate(task))) {
-                    flowLog.addMessage(`${task.name}: ${Math.floor(task.progress)}%完了`);
-                }
-            }
-            // レビュープロセスの処理
-            else if (task.status === TaskStatus.IN_REVIEW) {
-                this.processReview(task);
-            }
-        });
+// CI/CDステージの定義
+const CICDStage = {
+    BUILD: 'build',
+    TEST: 'test',
+    DEPLOY: 'deploy'
+};
 
-        // 新しいタスクのアクティブ化
-        while (activeCount < this.activeTaskLimit && 
-               usedDevelopers < this.systemResources.developers && 
-               taskQueue.length > 0) {
-            const nextTask = taskQueue.shift();
-            if (usedDevelopers + nextTask.resourceRequirements.developers <= this.systemResources.developers) {
-                nextTask.start();
-                activeCount++;
-                usedDevelopers += nextTask.resourceRequirements.developers;
-                flowLog.addMessage(`${nextTask.name} 開始`);
-            }
-        }
+// パイプラインステータスの定義
+const PipelineStatus = {
+    SUCCESS: 'success',
+    RUNNING: 'running',
+    FAILED: 'failed',
+    WAITING: 'waiting'
+};
 
-        this.updateMetrics();
-        this.updateUI();
-    }
+// タスクの種類定義の拡張
+const TaskType = {
+    REQUIREMENT: 'requirement',
+    DESIGN: 'design',
+    IMPLEMENTATION: 'implementation',
+    REVIEW: 'review',
+    TEST: 'test',
+    DOCUMENTATION: 'documentation',
+    BUILD: 'build',
+    DEPLOYMENT: 'deployment'
+};
 
-    // レビュープロセスの処理
-    processReview(task) {
-        if (task.reviewComments.length === 0) {
-            // レビューコメント生成のシミュレーション
-            if (Math.random() < 0.3) {  // 30%の確率でレビューコメント
-                const severity = Math.random() < 0.3 ? 'major' : 'minor';
-                task.addReviewComment('reviewer1', 
-                    `${severity === 'major' ? '重要な' : '軽微な'}修正が必要です`, 
-                    severity);
-                task.handleReviewFeedback(severity);
-                flowLog.addMessage(`${task.name}: レビューフィードバック受信`);
-            } else {
-                task.complete();
-                flowLog.addMessage(`${task.name}: レビュー完了`);
-            }
-        }
-    }
-
-    // 進捗率の計算（タスクの種類や状況に応じて変動）
-    getProgressRate(task) {
-        let baseRate = 1.0;
-
-        // タスクタイプによる調整
-        const typeRates = {
-            [TaskType.REQUIREMENT]: 0.8,
-            [TaskType.DESIGN]: 0.9,
-            [TaskType.IMPLEMENTATION]: 1.0,
-            [TaskType.TEST]: 1.2,
-            [TaskType.DOCUMENTATION]: 1.1
+class Pipeline {
+    constructor() {
+        this.stages = new Map();
+        this.currentStage = null;
+        this.status = PipelineStatus.WAITING;
+        this.logs = [];
+        this.metrics = {
+            buildTime: 0,
+            testCoverage: 0,
+            failedTests: 0,
+            deploymentTime: 0
         };
-        baseRate *= typeRates[task.type] || 1.0;
-
-        // 技術的負債による影響
-        baseRate *= (1 - (task.qualityMetrics.technicalDebt / 200));
-
-        // チーム規模による調整（開発者数が多いほど若干効率が下がる）
-        const developerEfficiency = 1 - (task.resourceRequirements.developers - 1) * 0.1;
-        baseRate *= Math.max(0.5, developerEfficiency);
-
-        return baseRate;
     }
 
-    // メトリクスの更新
-    updateMetrics() {
-        let totalQuality = 0;
-        let totalTasks = 0;
-        let totalTechnicalDebt = 0;
-        let totalReviewIterations = 0;
-
-        this.tasks.forEach(task => {
-            if (task.status === TaskStatus.COMPLETED) {
-                totalQuality += task.qualityMetrics.codeQuality;
-                totalTechnicalDebt += task.qualityMetrics.technicalDebt;
-                totalReviewIterations += task.reviewIterations;
-                totalTasks++;
-            }
+    addStage(stage, config) {
+        this.stages.set(stage, {
+            status: PipelineStatus.WAITING,
+            config,
+            startTime: null,
+            endTime: null,
+            artifacts: new Map()
         });
-
-        this.metrics.completedTasks = totalTasks;
-        this.metrics.averageCodeQuality = totalTasks > 0 ? totalQuality / totalTasks : 100;
-        this.metrics.totalTechnicalDebt = totalTechnicalDebt;
-        this.metrics.totalReviewIterations = totalReviewIterations;
     }
 
-    // UI更新
-    updateUI() {
-        // タスクツリーの更新
-        const treeContainer = document.getElementById('task-tree');
-        treeContainer.innerHTML = '';
-        
-        const renderTask = (task, level = 0) => {
-            const taskElement = document.createElement('div');
-            taskElement.className = `task-item priority-${task.priority}`;
-            
-            const header = document.createElement('div');
-            header.className = 'task-header';
-            
-            const statusIndicator = document.createElement('span');
-            statusIndicator.className = `status-indicator status-${task.status}`;
-            
-            const title = document.createElement('span');
-            title.textContent = `${task.name} (${Math.floor(task.progress)}%)`;
-            
-            const metrics = document.createElement('div');
-            metrics.className = 'task-metrics';
-            if (task.type === TaskType.IMPLEMENTATION) {
-                metrics.innerHTML = `
-                    <div>品質: ${Math.floor(task.qualityMetrics.codeQuality)}%</div>
-                    <div>カバレッジ: ${Math.floor(task.qualityMetrics.testCoverage)}%</div>
-                    <div>負債: ${Math.floor(task.qualityMetrics.technicalDebt)}</div>
-                `;
-            }
-            
-            header.appendChild(statusIndicator);
-            header.appendChild(title);
-            taskElement.appendChild(header);
-            taskElement.appendChild(metrics);
-            
-            const progress = document.createElement('div');
-            progress.className = 'progress-bar';
-            const progressFill = document.createElement('div');
-            progressFill.className = 'progress-fill';
-            progressFill.style.width = `${task.progress}%`;
-            progress.appendChild(progressFill);
-            taskElement.appendChild(progress);
-            
-            if (task.reviewComments.length > 0) {
-                const reviewInfo = document.createElement('div');
-                reviewInfo.className = 'review-info';
-                reviewInfo.textContent = `レビューコメント: ${task.reviewComments.length}件`;
-                taskElement.appendChild(reviewInfo);
-            }
-            
-            if (task.subtasks.size > 0) {
-                const subtasksContainer = document.createElement('div');
-                subtasksContainer.className = 'subtask-container';
-                task.subtasks.forEach(subtask => {
-                    subtasksContainer.appendChild(renderTask(subtask, level + 1));
-                });
-                taskElement.appendChild(subtasksContainer);
-            }
-            
-            return taskElement;
-        };
+    async startStage(stage) {
+        const stageData = this.stages.get(stage);
+        if (!stageData) return false;
 
-        // ルートタスクの描画
-        this.tasks.forEach(task => {
-            if (!task.parentTask) {
-                treeContainer.appendChild(renderTask(task));
-            }
-        });
+        stageData.status = PipelineStatus.RUNNING;
+        stageData.startTime = Date.now();
+        this.currentStage = stage;
+        this.status = PipelineStatus.RUNNING;
+        this.addLog(`Starting ${stage} stage`);
 
-        // リソースメーターの更新
-        document.getElementById('cpu-meter').style.width = 
-            `${this.systemResources.cpu}%`;
-        document.getElementById('memory-meter').style.width = 
-            `${this.systemResources.memory}%`;
-            
-        // 開発者リソースメーターの更新
-        const devMeter = document.getElementById('developer-meter');
-        if (devMeter) {
-            devMeter.style.width = 
-                `${(this.getUsedDevelopers() / this.systemResources.developers) * 100}%`;
+        return true;
+    }
+
+    completeStage(stage, success = true) {
+        const stageData = this.stages.get(stage);
+        if (!stageData) return false;
+
+        stageData.status = success ? PipelineStatus.SUCCESS : PipelineStatus.FAILED;
+        stageData.endTime = Date.now();
+        this.addLog(`${stage} stage ${success ? 'completed' : 'failed'}`);
+
+        if (!success) {
+            this.status = PipelineStatus.FAILED;
+            return false;
         }
+
+        // 次のステージを探す
+        const stageOrder = [CICDStage.BUILD, CICDStage.TEST, CICDStage.DEPLOY];
+        const currentIndex = stageOrder.indexOf(stage);
+        const nextStage = stageOrder[currentIndex + 1];
+
+        if (nextStage) {
+            this.startStage(nextStage);
+        } else {
+            this.status = PipelineStatus.SUCCESS;
+            this.currentStage = null;
+        }
+
+        return true;
     }
 
-    // 使用中の開発者数を計算
-    getUsedDevelopers() {
-        return Array.from(this.tasks.values())
-            .filter(task => task.status === TaskStatus.IN_PROGRESS || 
-                          task.status === TaskStatus.ANALYZING)
-            .reduce((sum, task) => sum + task.resourceRequirements.developers, 0);
-    }
-
-    onTaskCompleted(task) {
-        flowLog.addMessage(`${task.name} 完了`);
-        // 依存タスクの状態更新
-        this.tasks.forEach(t => {
-            if (t.dependencies.has(task.id) && t.status === TaskStatus.PENDING) {
-                const canStart = Array.from(t.dependencies)
-                    .every(depId => this.getTask(depId).status === TaskStatus.COMPLETED);
-                if (canStart) {
-                    flowLog.addMessage(`${t.name} 開始可能`);
-                }
-            }
+    addLog(message) {
+        this.logs.push({
+            timestamp: new Date(),
+            message,
+            stage: this.currentStage
         });
+    }
+
+    updateMetrics(metrics) {
+        Object.assign(this.metrics, metrics);
     }
 }
 
-// グローバルインスタンスの作成
-const taskManager = new TaskManager();
+class Task {
+    constructor(id, name, type, priority = Priority.MEDIUM) {
+        // ... 既存のコンストラクタコード ...
+        this.pipeline = type === TaskType.IMPLEMENTATION ? new Pipeline() : null;
+        this.buildArtifacts = new Map();
+    }
+
+    // 既存のメソッドは維持したまま、新しいメソッドを追加
+
+    async startBuild() {
+        if (!this.pipeline) return false;
+
+        this.status = TaskStatus.BUILDING;
+        await this.pipeline.startStage(CICDStage.BUILD);
+        
+        // ビルドプロセスのシミュレーション
+        const buildTime = Math.random() * 3000 + 2000;
+        setTimeout(() => {
+            const success = Math.random() > 0.1; // 10%の確率で失敗
+            this.completeBuild(success);
+        }, buildTime);
+
+        return true;
+    }
+
+    completeBuild(success) {
+        if (success) {
+            this.pipeline.completeStage(CICDStage.BUILD);
+            this.status = TaskStatus.TESTING;
+            this.startTests();
+        } else {
+            this.pipeline.completeStage(CICDStage.BUILD, false);
+            this.status = TaskStatus.FAILED;
+        }
+    }
+
+    async startTests() {
+        if (!this.pipeline) return false;
+
+        await this.pipeline.startStage(CICDStage.TEST);
+        
+        // テストプロセスのシミュレーション
+        const testTime = Math.random() * 2000 + 1000;
+        setTimeout(() => {
+            const success = Math.random() > 0.15; // 15%の確率で失敗
+            this.completeTests(success);
+        }, testTime);
+
+        return true;
+    }
+
+    completeTests(success) {
+        if (success) {
+            this.pipeline.completeStage(CICDStage.TEST);
+            this.status = TaskStatus.DEPLOY_PENDING;
+            this.startDeployment();
+        } else {
+            this.pipeline.completeStage(CICDStage.TEST, false);
+            this.status = TaskStatus.FAILED;
+        }
+    }
+
+    async startDeployment() {
+        if (!this.pipeline) return false;
+
+        this.status = TaskStatus.DEPLOYING;
+        await this.pipeline.startStage(CICDStage.DEPLOY);
+        
+        // デプロイプロセスのシミュレーション
+        const deployTime = Math.random() * 2000 + 1000;
+        setTimeout(() => {
+            const success = Math.random() > 0.05; // 5%の確率で失敗
+            this.completeDeployment(success);
+        }, deployTime);
+
+        return true;
+    }
+
+    completeDeployment(success) {
+        if (success) {
+            this.pipeline.completeStage(CICDStage.DEPLOY);
+            this.status = TaskStatus.COMPLETED;
+        } else {
+            this.pipeline.completeStage(CICDStage.DEPLOY, false);
+            this.status = TaskStatus.FAILED;
+        }
+    }
+}
+
+// TaskManagerクラスの拡張
+class TaskManager {
+    constructor() {
+        // ... 既存のコンストラクタコード ...
+        this.pipelineMetrics = {
+            totalBuilds: 0,
+            successfulBuilds: 0,
+            averageBuildTime: 0,
+            averageTestCoverage: 0,
+            deploymentSuccess: 0
+        };
+    }
+
+    // 既存のメソッドを維持したまま、新しいメソッドを追加
+
+    updatePipelineMetrics() {
+        const implementationTasks = Array.from(this.tasks.values())
+            .filter(task => task.type === TaskType.IMPLEMENTATION && task.pipeline);
+
+        if (implementationTasks.length === 0) return;
+
+        let totalBuildTime = 0;
+        let totalTestCoverage = 0;
+        let successfulBuilds = 0;
+        let successfulDeploys = 0;
+
+        implementationTasks.forEach(task => {
+            if (task.pipeline.metrics.buildTime > 0) {
+                totalBuildTime += task.pipeline.metrics.buildTime;
+            }
+            if (task.pipeline.status === PipelineStatus.SUCCESS) {
+                successfulBuilds++;
+            }
+            totalTestCoverage += task.pipeline.metrics.testCoverage;
+            if (task.status === TaskStatus.COMPLETED) {
+                successfulDeploys++;
+            }
+        });
+
+        this.pipelineMetrics = {
+            totalBuilds: implementationTasks.length,
+            successfulBuilds,
+            averageBuildTime: totalBuildTime / implementationTasks.length,
+            averageTestCoverage: totalTestCoverage / implementationTasks.length,
+            deploymentSuccess: successfulDeploys / implementationTasks.length
+        };
+    }
+}
