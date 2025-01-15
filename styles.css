@@ -1,15 +1,21 @@
-body { margin: 0; background: #000811; overflow: hidden; }
+body {
+    margin: 0;
+    background: #000811;
+    overflow: hidden;
+    font-family: "Helvetica Neue", Arial, sans-serif;
+    color: #7fdbff;
+}
 
 .panel {
     background: rgba(0, 16, 32, 0.85);
     border: 1px solid rgba(127, 219, 255, 0.3);
     box-shadow: 0 0 20px rgba(127, 219, 255, 0.2);
+    backdrop-filter: blur(10px);
     position: absolute;
     padding: 20px;
-    color: #7fdbff;
-    font-family: "Helvetica Neue", Arial, sans-serif;
 }
 
+/* メインパネルのレイアウト */
 #task-tree-panel {
     top: 20px;
     left: 20px;
@@ -18,10 +24,10 @@ body { margin: 0; background: #000811; overflow: hidden; }
     overflow-y: auto;
 }
 
-#resource-panel {
+#metrics-panel {
     top: 20px;
     right: 20px;
-    width: 250px;
+    width: 300px;
 }
 
 #flow-panel {
@@ -33,65 +39,192 @@ body { margin: 0; background: #000811; overflow: hidden; }
     overflow-y: auto;
 }
 
+/* タスク表示のスタイル */
 .task-item {
-    margin: 8px 0;
-    padding: 8px;
+    margin: 10px 0;
+    padding: 12px;
     background: rgba(127, 219, 255, 0.05);
     border-left: 3px solid #7fdbff;
+    transition: all 0.3s ease;
 }
 
-.subtask-container {
-    margin-left: 20px;
+.task-item:hover {
+    background: rgba(127, 219, 255, 0.1);
+    transform: translateX(5px);
 }
 
+.task-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.task-metrics {
+    font-size: 0.9em;
+    margin-top: 5px;
+    padding: 5px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 3px;
+}
+
+.task-metrics div {
+    margin: 2px 0;
+}
+
+/* プログレスバーのスタイル */
 .progress-bar {
     height: 4px;
     background: rgba(127, 219, 255, 0.1);
     margin-top: 8px;
+    border-radius: 2px;
+    overflow: hidden;
 }
 
 .progress-fill {
     height: 100%;
     background: linear-gradient(90deg, #7fdbff, #00ff9d);
     width: 0%;
-    transition: width 0.3s;
-}
-
-.resource-meter {
-    width: 100%;
-    height: 20px;
-    background: rgba(127, 219, 255, 0.1);
-    margin: 5px 0;
+    transition: width 0.3s ease;
     position: relative;
 }
 
-.resource-fill {
-    height: 100%;
-    background: #7fdbff;
-    width: 0%;
-    transition: width 0.3s;
+.progress-fill::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(
+        90deg,
+        transparent,
+        rgba(255, 255, 255, 0.4),
+        transparent
+    );
+    animation: progress-shine 1.5s infinite;
 }
 
-.flow-message {
-    margin: 5px 0;
-    padding: 5px;
-    border-left: 2px solid #7fdbff;
-    font-family: monospace;
+@keyframes progress-shine {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
 }
 
-.priority-high { border-color: #ff4444; }
-.priority-medium { border-color: #ffbb33; }
-.priority-low { border-color: #00C851; }
-
+/* ステータスインジケーター */
 .status-indicator {
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    display: inline-block;
-    margin-right: 5px;
+    margin-right: 8px;
+    position: relative;
 }
 
-.status-active { background: #00ff9d; }
-.status-waiting { background: #7fdbff; }
-.status-completed { background: #4a4; }
+.status-indicator::after {
+    content: '';
+    position: absolute;
+    top: -2px;
+    left: -2px;
+    right: -2px;
+    bottom: -2px;
+    border-radius: 50%;
+    border: 2px solid currentColor;
+    opacity: 0;
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0% { opacity: 1; transform: scale(1); }
+    100% { opacity: 0; transform: scale(1.5); }
+}
+
+.status-pending { background: #7fdbff; }
+.status-analyzing { background: #00ff9d; animation: blink 1s infinite; }
+.status-in_progress { background: #00ff9d; }
+.status-in_review { background: #ffbb33; }
+.status-review_feedback { background: #ff4444; }
+.status-testing { background: #b4a7d6; }
 .status-blocked { background: #ff4444; }
+.status-completed { background: #4a4; }
+.status-failed { background: #ff4444; }
+
+@keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* 優先度による色分け */
+.priority-critical { border-color: #ff4444; }
+.priority-high { border-color: #ffbb33; }
+.priority-medium { border-color: #00ff9d; }
+.priority-low { border-color: #7fdbff; }
+
+/* レビュー情報 */
+.review-info {
+    font-size: 0.9em;
+    margin-top: 5px;
+    padding: 5px;
+    background: rgba(255, 187, 51, 0.1);
+    border-left: 2px solid #ffbb33;
+}
+
+/* リソースメーター */
+.resource-meter {
+    width: 100%;
+    height: 24px;
+    background: rgba(127, 219, 255, 0.1);
+    margin: 10px 0;
+    position: relative;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.resource-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #7fdbff, #00ff9d);
+    width: 0%;
+    transition: width 0.3s ease;
+    position: relative;
+}
+
+.resource-label {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 0.9em;
+    text-shadow: 0 0 4px rgba(0, 0, 0, 0.5);
+}
+
+/* メトリクスパネル */
+.metric-group {
+    margin: 15px 0;
+    padding: 10px;
+    background: rgba(127, 219, 255, 0.05);
+    border-radius: 5px;
+}
+
+.metric-title {
+    font-size: 0.9em;
+    color: #7fdbff;
+    margin-bottom: 5px;
+}
+
+.metric-value {
+    font-size: 1.2em;
+    font-weight: bold;
+    color: #00ff9d;
+}
+
+/* フローログ */
+.flow-message {
+    margin: 5px 0;
+    padding: 5px 10px;
+    border-left: 2px solid #7fdbff;
+    font-family: monospace;
+    animation: message-fade-in 0.3s ease;
+}
+
+@keyframes message-fade-in {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
