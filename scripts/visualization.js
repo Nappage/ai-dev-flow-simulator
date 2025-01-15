@@ -3,73 +3,196 @@ const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setClearColor(0x000811);
 document.getElementById('container').appendChild(renderer.domElement);
 
-// エージェントの設定
+// エージェントの基本設定
 const agentTypes = [
-    { type: 'architecture', position: [-3, 3, 0], color: 0x7fdbff },
-    { type: 'code', position: [3, 3, 0], color: 0x00ff9d },
-    { type: 'test', position: [-3, -3, 0], color: 0x7fdbff },
-    { type: 'documentation', position: [3, -3, 0], color: 0x00ff9d }
+    {
+        type: 'requirement',
+        position: [-4, 4, 0],
+        color: 0x7fdbff,
+        tasks: TaskType.REQUIREMENT
+    },
+    {
+        type: 'design',
+        position: [0, 4, 0],
+        color: 0x00ff9d,
+        tasks: TaskType.DESIGN
+    },
+    {
+        type: 'implementation',
+        position: [4, 4, 0],
+        color: 0xff3366,
+        tasks: TaskType.IMPLEMENTATION
+    },
+    {
+        type: 'review',
+        position: [-4, -4, 0],
+        color: 0xffbb33,
+        tasks: TaskType.REVIEW
+    },
+    {
+        type: 'test',
+        position: [0, -4, 0],
+        color: 0xb4a7d6,
+        tasks: TaskType.TEST
+    },
+    {
+        type: 'documentation',
+        position: [4, -4, 0],
+        color: 0x00ff9d,
+        tasks: TaskType.DOCUMENTATION
+    }
 ];
 
+// ホログラム効果のシェーダー
+const hologramShader = {
+    vertexShader: `
+        varying vec2 vUv;
+        varying vec3 vPosition;
+        void main() {
+            vUv = uv;
+            vPosition = position;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+    `,
+    fragmentShader: `
+        uniform float time;
+        uniform vec3 baseColor;
+        varying vec2 vUv;
+        varying vec3 vPosition;
+
+        void main() {
+            float scanline = sin(vPosition.y * 50.0 + time * 5.0) * 0.1 + 0.9;
+            float edge = sin(time * 2.0) * 0.1 + 0.9;
+            vec3 color = baseColor * scanline * edge;
+            float alpha = 0.7 + 0.3 * sin(vUv.y * 50.0 + time * 3.0);
+            gl_FragColor = vec4(color, alpha);
+        }
+    `
+};
+
 // エージェントメッシュの作成
-const agentMeshes = agentTypes.map(agentType => {
+function createAgentMesh(agentType) {
     const group = new THREE.Group();
 
-    // 中心球体
-    const sphereGeometry = new THREE.SphereGeometry(0.3, 32, 32);
-    const sphereMaterial = new THREE.MeshPhongMaterial({
-        color: agentType.color,
-        emissive: agentType.color,
-        emissiveIntensity: 0.5,
+    // 中心の球体
+    const sphereGeometry = new THREE.IcosahedronGeometry(0.5, 2);
+    const sphereMaterial = new THREE.ShaderMaterial({
+        uniforms: {
+            time: { value: 0 },
+            baseColor: { value: new THREE.Color(agentType.color) }
+        },
+        vertexShader: hologramShader.vertexShader,
+        fragmentShader: hologramShader.fragmentShader,
         transparent: true,
-        opacity: 0.8
+        side: THREE.DoubleSide
     });
     const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
     group.add(sphere);
 
     // 回転リング
-    const ringGeometry = new THREE.TorusGeometry(0.5, 0.02, 16, 100);
-    const ringMaterial = new THREE.MeshBasicMaterial({
-        color: agentType.color,
-        transparent: true,
-        opacity: 0.3
-    });
-
     for (let i = 0; i < 3; i++) {
+        const ringGeometry = new THREE.TorusGeometry(0.8 + i * 0.2, 0.02, 16, 100);
+        const ringMaterial = new THREE.MeshBasicMaterial({
+            color: agentType.color,
+            transparent: true,
+            opacity: 0.3 - i * 0.1
+        });
         const ring = new THREE.Mesh(ringGeometry, ringMaterial);
         ring.rotation.x = Math.random() * Math.PI;
         ring.rotation.y = Math.random() * Math.PI;
         group.add(ring);
     }
 
+    // 情報パネル
+    const panelGeometry = new THREE.PlaneGeometry(1.5, 0.5);
+    const panelMaterial = new THREE.MeshBasicMaterial({
+        color: agentType.color,
+        transparent: true,
+        opacity: 0.2,
+        side: THREE.DoubleSide
+    });
+    const panel = new THREE.Mesh(panelGeometry, panelMaterial);
+    panel.position.z = 1;
+    group.add(panel);
+
     group.position.set(...agentType.position);
     scene.add(group);
-    
-    return { group, type: agentType.type, materials: [sphereMaterial, ringMaterial] };
-});
 
-// エージェント間のデータフローライン
+    return {
+        group,
+        materials: [sphereMaterial, ...group.children.slice(1).map(child => child.material)],
+        type: agentType.type
+    };
+}
+
+// エージェントの生成
+const agents = agentTypes.map(createAgentMesh);
+
+// データフローラインの作成
 const dataFlowLines = [];
 agentTypes.forEach((agent1, i) => {
     agentTypes.forEach((agent2, j) => {
-        if (i !== j) {
-            const geometry = new THREE.BufferGeometry().setFromPoints([
+        if (i < j) {
+            const geometry = new THREE.BufferGeometry();
+            const points = [
                 new THREE.Vector3(...agent1.position),
                 new THREE.Vector3(...agent2.position)
-            ]);
-            const material = new THREE.LineBasicMaterial({
+            ];
+            geometry.setFromPoints(points);
+
+            const material = new THREE.LineDashedMaterial({
                 color: 0x7fdbff,
+                dashSize: 0.3,
+                gapSize: 0.1,
                 transparent: true,
-                opacity: 0.1
+                opacity: 0.3
             });
+
             const line = new THREE.Line(geometry, material);
+            line.computeLineDistances();
             scene.add(line);
             dataFlowLines.push({ line, material });
         }
     });
 });
+
+// パーティクルシステム
+function createParticleSystem() {
+    const particleCount = 1000;
+    const geometry = new THREE.BufferGeometry();
+    const positions = new Float32Array(particleCount * 3);
+    const colors = new Float32Array(particleCount * 3);
+
+    for (let i = 0; i < particleCount * 3; i += 3) {
+        positions[i] = (Math.random() - 0.5) * 20;
+        positions[i + 1] = (Math.random() - 0.5) * 20;
+        positions[i + 2] = (Math.random() - 0.5) * 20;
+
+        const color = new THREE.Color(0x7fdbff);
+        color.setHSL(Math.random(), 0.8, 0.8);
+        colors[i] = color.r;
+        colors[i + 1] = color.g;
+        colors[i + 2] = color.b;
+    }
+
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+    const material = new THREE.PointsMaterial({
+        size: 0.1,
+        vertexColors: true,
+        transparent: true,
+        opacity: 0.6
+    });
+
+    return new THREE.Points(geometry, material);
+}
+
+const particles = createParticleSystem();
+scene.add(particles);
 
 // ライティング
 const light = new THREE.PointLight(0x7fdbff, 1, 100);
@@ -80,69 +203,6 @@ scene.add(new THREE.AmbientLight(0x404040));
 // カメラ設定
 camera.position.z = 15;
 
-// グローバルインスタンス
-const taskManager = new TaskManager();
-const flowLog = new FlowLog();
-
-// サンプルタスクの初期化
-function initializeTasks() {
-    // アーキテクチャ設計フェーズ
-    const archDesign = taskManager.createTask('arch-main', 'システム設計', Priority.HIGH);
-    archDesign.resourceRequirements = { cpu: 30, memory: 20 };
-
-    const requirements = taskManager.createTask('arch-req', '要件分析', Priority.HIGH);
-    requirements.resourceRequirements = { cpu: 20, memory: 15 };
-    archDesign.addSubtask(requirements);
-
-    const systemArch = taskManager.createTask('arch-sys', 'システムアーキテクチャ設計', Priority.HIGH);
-    systemArch.resourceRequirements = { cpu: 25, memory: 20 };
-    systemArch.addDependency(requirements);
-    archDesign.addSubtask(systemArch);
-
-    // コード生成フェーズ
-    const codeGen = taskManager.createTask('code-main', 'コード生成', Priority.MEDIUM);
-    codeGen.resourceRequirements = { cpu: 40, memory: 30 };
-    codeGen.addDependency(archDesign);
-
-    const coreImpl = taskManager.createTask('code-core', 'コア機能実装', Priority.MEDIUM);
-    coreImpl.resourceRequirements = { cpu: 35, memory: 25 };
-    codeGen.addSubtask(coreImpl);
-
-    const apiImpl = taskManager.createTask('code-api', 'API実装', Priority.MEDIUM);
-    apiImpl.resourceRequirements = { cpu: 30, memory: 20 };
-    apiImpl.addDependency(coreImpl);
-    codeGen.addSubtask(apiImpl);
-
-    // テストフェーズ
-    const testing = taskManager.createTask('test-main', 'テスト実行', Priority.MEDIUM);
-    testing.resourceRequirements = { cpu: 35, memory: 40 };
-    testing.addDependency(codeGen);
-
-    const unitTest = taskManager.createTask('test-unit', 'ユニットテスト', Priority.MEDIUM);
-    unitTest.resourceRequirements = { cpu: 25, memory: 20 };
-    testing.addSubtask(unitTest);
-
-    const integrationTest = taskManager.createTask('test-int', '統合テスト', Priority.MEDIUM);
-    integrationTest.resourceRequirements = { cpu: 30, memory: 35 };
-    integrationTest.addDependency(unitTest);
-    testing.addSubtask(integrationTest);
-
-    // ドキュメント生成フェーズ
-    const documentation = taskManager.createTask('doc-main', 'ドキュメント生成', Priority.LOW);
-    documentation.resourceRequirements = { cpu: 20, memory: 25 };
-    documentation.addDependency(testing);
-    documentation.addDependency(codeGen);
-
-    const apiDoc = taskManager.createTask('doc-api', 'API仕様書作成', Priority.LOW);
-    apiDoc.resourceRequirements = { cpu: 15, memory: 20 };
-    documentation.addSubtask(apiDoc);
-
-    const userDoc = taskManager.createTask('doc-user', 'ユーザーマニュアル作成', Priority.LOW);
-    userDoc.resourceRequirements = { cpu: 15, memory: 20 };
-    userDoc.addDependency(apiDoc);
-    documentation.addSubtask(userDoc);
-}
-
 // アニメーションループ
 let time = 0;
 function animate() {
@@ -150,34 +210,48 @@ function animate() {
     time += 0.01;
 
     // エージェントのアニメーション
-    agentMeshes.forEach(({ group, type, materials }) => {
-        const isActive = Array.from(taskManager.tasks.values()).some(task => 
-            task.status === TaskStatus.ACTIVE && 
-            task.id.startsWith(type)
+    agents.forEach(agent => {
+        // シェーダーの時間更新
+        agent.materials[0].uniforms.time.value = time;
+
+        // アクティブ状態の確認
+        const isActive = Array.from(taskManager.tasks.values()).some(task =>
+            task.type === agent.type && 
+            (task.status === TaskStatus.IN_PROGRESS || 
+             task.status === TaskStatus.ANALYZING ||
+             task.status === TaskStatus.IN_REVIEW)
         );
 
         // 回転速度とエフェクト強度の調整
-        const rotationSpeed = isActive ? 0.04 : 0.01;
-        const emissiveIntensity = isActive ? 0.8 : 0.3;
-        
-        group.rotation.y += rotationSpeed;
-        materials[0].emissiveIntensity = emissiveIntensity;
+        const rotationSpeed = isActive ? 0.02 : 0.005;
+        agent.group.rotation.y += rotationSpeed;
 
         // リングのアニメーション
-        for (let i = 1; i < group.children.length; i++) {
-            group.children[i].rotation.x += rotationSpeed;
-            group.children[i].rotation.y += rotationSpeed;
-            materials[1].opacity = 0.3 + Math.sin(time * 2) * 0.1;
+        for (let i = 1; i <= 3; i++) {
+            const ring = agent.group.children[i];
+            ring.rotation.x += rotationSpeed * (i * 0.5);
+            ring.rotation.y += rotationSpeed * (i * 0.3);
+            agent.materials[i].opacity = 0.3 + Math.sin(time * 2 + i) * 0.1;
         }
     });
 
     // データフローラインのアニメーション
     dataFlowLines.forEach(({ material }) => {
-        material.opacity = 0.1 + Math.sin(time * 2) * 0.05;
+        material.dashOffset -= 0.1;
+        material.opacity = 0.3 + Math.sin(time * 2) * 0.1;
     });
 
-    // タスクの更新
-    taskManager.updateTasks(0.016); // 約60FPS相当のデルタタイム
+    // パーティクルのアニメーション
+    const positions = particles.geometry.attributes.position.array;
+    for (let i = 0; i < positions.length; i += 3) {
+        positions[i + 1] += Math.sin(time + positions[i]) * 0.01;
+        positions[i] += Math.cos(time + positions[i + 1]) * 0.01;
+
+        if (Math.abs(positions[i]) > 10) positions[i] *= 0.95;
+        if (Math.abs(positions[i + 1]) > 10) positions[i + 1] *= 0.95;
+        if (Math.abs(positions[i + 2]) > 10) positions[i + 2] *= 0.95;
+    }
+    particles.geometry.attributes.position.needsUpdate = true;
 
     // カメラの動き
     camera.position.x = Math.sin(time * 0.1) * 2;
@@ -194,7 +268,5 @@ window.addEventListener('resize', () => {
     renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
-// システムの初期化と開始
-initializeTasks();
-flowLog.addMessage('開発フロー初期化完了');
+// アニメーション開始
 animate();
