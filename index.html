@@ -10,29 +10,67 @@
     <div id="container"></div>
     
     <div id="task-tree-panel" class="panel">
-        <h2>タスクツリー</h2>
+        <h2>Development Tasks</h2>
+        <div class="control-group">
+            <button id="add-task" class="control-button">Add Task</button>
+            <button id="toggle-view" class="control-button">Toggle View</button>
+        </div>
         <div id="task-tree"></div>
     </div>
 
-    <div id="resource-panel" class="panel">
-        <h2>リソース状態</h2>
-        <div class="resource-item">
-            <div>CPU使用率</div>
+    <div id="metrics-panel" class="panel">
+        <h2>System Metrics</h2>
+        <div class="metric-group">
+            <div class="metric-title">Resource Usage</div>
             <div class="resource-meter">
                 <div class="resource-fill" id="cpu-meter"></div>
+                <div class="resource-label">CPU: <span id="cpu-value">0%</span></div>
             </div>
-        </div>
-        <div class="resource-item">
-            <div>メモリ使用率</div>
             <div class="resource-meter">
                 <div class="resource-fill" id="memory-meter"></div>
+                <div class="resource-label">Memory: <span id="memory-value">0%</span></div>
+            </div>
+            <div class="resource-meter">
+                <div class="resource-fill" id="developer-meter"></div>
+                <div class="resource-label">Developers: <span id="developer-value">0/5</span></div>
             </div>
         </div>
-        <div id="active-tasks-container"></div>
+
+        <div class="metric-group">
+            <div class="metric-title">Quality Metrics</div>
+            <div class="metric-item">
+                <span>Code Quality:</span>
+                <span id="code-quality" class="metric-value">100%</span>
+            </div>
+            <div class="metric-item">
+                <span>Technical Debt:</span>
+                <span id="technical-debt" class="metric-value">0</span>
+            </div>
+            <div class="metric-item">
+                <span>Review Cycles:</span>
+                <span id="review-cycles" class="metric-value">0</span>
+            </div>
+        </div>
+
+        <div class="metric-group">
+            <div class="metric-title">Progress Overview</div>
+            <div class="metric-item">
+                <span>Completed Tasks:</span>
+                <span id="completed-tasks" class="metric-value">0</span>
+            </div>
+            <div class="metric-item">
+                <span>Active Tasks:</span>
+                <span id="active-tasks" class="metric-value">0</span>
+            </div>
+            <div class="metric-item">
+                <span>Blocked Tasks:</span>
+                <span id="blocked-tasks" class="metric-value">0</span>
+            </div>
+        </div>
     </div>
 
     <div id="flow-panel" class="panel">
-        <h2>実行ログ</h2>
+        <h2>Development Log</h2>
         <div id="flow-log"></div>
     </div>
 
