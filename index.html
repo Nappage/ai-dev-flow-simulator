@@ -18,8 +18,66 @@
         <div id="task-tree"></div>
     </div>
 
+    <div id="pipeline-panel" class="panel">
+        <h2>CI/CD Pipeline</h2>
+        <div class="pipeline-stages">
+            <div class="stage" id="build-stage">
+                <div class="stage-header">Build</div>
+                <div class="stage-content">
+                    <div class="stage-metrics">
+                        <div class="metric">Success Rate: <span id="build-success-rate">0%</span></div>
+                        <div class="metric">Avg Time: <span id="build-avg-time">0s</span></div>
+                    </div>
+                    <div class="stage-status" id="build-status"></div>
+                </div>
+            </div>
+            <div class="pipeline-connector"></div>
+            <div class="stage" id="test-stage">
+                <div class="stage-header">Test</div>
+                <div class="stage-content">
+                    <div class="stage-metrics">
+                        <div class="metric">Coverage: <span id="test-coverage">0%</span></div>
+                        <div class="metric">Failed: <span id="test-failed">0</span></div>
+                    </div>
+                    <div class="stage-status" id="test-status"></div>
+                </div>
+            </div>
+            <div class="pipeline-connector"></div>
+            <div class="stage" id="deploy-stage">
+                <div class="stage-header">Deploy</div>
+                <div class="stage-content">
+                    <div class="stage-metrics">
+                        <div class="metric">Success Rate: <span id="deploy-success-rate">0%</span></div>
+                        <div class="metric">Env: <span id="deploy-environment">Staging</span></div>
+                    </div>
+                    <div class="stage-status" id="deploy-status"></div>
+                </div>
+            </div>
+        </div>
+        <div class="pipeline-logs" id="pipeline-logs">
+            <div class="logs-header">Pipeline Logs</div>
+            <div class="logs-content" id="pipeline-logs-content"></div>
+        </div>
+    </div>
+
     <div id="metrics-panel" class="panel">
         <h2>System Metrics</h2>
+        <div class="metric-group">
+            <div class="metric-title">CI/CD Metrics</div>
+            <div class="resource-meter">
+                <div class="resource-fill" id="pipeline-success-meter"></div>
+                <div class="resource-label">Pipeline Success: <span id="pipeline-success-rate">0%</span></div>
+            </div>
+            <div class="resource-meter">
+                <div class="resource-fill" id="test-coverage-meter"></div>
+                <div class="resource-label">Test Coverage: <span id="total-test-coverage">0%</span></div>
+            </div>
+            <div class="resource-meter">
+                <div class="resource-fill" id="deploy-frequency-meter"></div>
+                <div class="resource-label">Deploy Frequency: <span id="deploy-frequency">0/day</span></div>
+            </div>
+        </div>
+
         <div class="metric-group">
             <div class="metric-title">Resource Usage</div>
             <div class="resource-meter">
@@ -51,22 +109,6 @@
                 <span id="review-cycles" class="metric-value">0</span>
             </div>
         </div>
-
-        <div class="metric-group">
-            <div class="metric-title">Progress Overview</div>
-            <div class="metric-item">
-                <span>Completed Tasks:</span>
-                <span id="completed-tasks" class="metric-value">0</span>
-            </div>
-            <div class="metric-item">
-                <span>Active Tasks:</span>
-                <span id="active-tasks" class="metric-value">0</span>
-            </div>
-            <div class="metric-item">
-                <span>Blocked Tasks:</span>
-                <span id="blocked-tasks" class="metric-value">0</span>
-            </div>
-        </div>
     </div>
 
     <div id="flow-panel" class="panel">
@@ -75,6 +117,7 @@
     </div>
 
     <script src="scripts/TaskManager.js"></script>
+    <script src="scripts/Pipeline.js"></script>
     <script src="scripts/FlowLog.js"></script>
     <script src="scripts/visualization.js"></script>
 </body>
