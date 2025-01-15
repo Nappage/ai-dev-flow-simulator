@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Advanced Development Flow Simulation</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="container"></div>
+    
+    <div id="task-tree-panel" class="panel">
+        <h2>タスクツリー</h2>
+        <div id="task-tree"></div>
+    </div>
+
+    <div id="resource-panel" class="panel">
+        <h2>リソース状態</h2>
+        <div class="resource-item">
+            <div>CPU使用率</div>
+            <div class="resource-meter">
+                <div class="resource-fill" id="cpu-meter"></div>
+            </div>
+        </div>
+        <div class="resource-item">
+            <div>メモリ使用率</div>
+            <div class="resource-meter">
+                <div class="resource-fill" id="memory-meter"></div>
+            </div>
+        </div>
+        <div id="active-tasks-container"></div>
+    </div>
+
+    <div id="flow-panel" class="panel">
+        <h2>実行ログ</h2>
+        <div id="flow-log"></div>
+    </div>
+
+    <script src="scripts/TaskManager.js"></script>
+    <script src="scripts/FlowLog.js"></script>
+    <script src="scripts/visualization.js"></script>
+</body>
+</html>

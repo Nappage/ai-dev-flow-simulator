@@ -1,0 +1,97 @@
+body { margin: 0; background: #000811; overflow: hidden; }
+
+.panel {
+    background: rgba(0, 16, 32, 0.85);
+    border: 1px solid rgba(127, 219, 255, 0.3);
+    box-shadow: 0 0 20px rgba(127, 219, 255, 0.2);
+    position: absolute;
+    padding: 20px;
+    color: #7fdbff;
+    font-family: "Helvetica Neue", Arial, sans-serif;
+}
+
+#task-tree-panel {
+    top: 20px;
+    left: 20px;
+    width: 300px;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+#resource-panel {
+    top: 20px;
+    right: 20px;
+    width: 250px;
+}
+
+#flow-panel {
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 80%;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.task-item {
+    margin: 8px 0;
+    padding: 8px;
+    background: rgba(127, 219, 255, 0.05);
+    border-left: 3px solid #7fdbff;
+}
+
+.subtask-container {
+    margin-left: 20px;
+}
+
+.progress-bar {
+    height: 4px;
+    background: rgba(127, 219, 255, 0.1);
+    margin-top: 8px;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #7fdbff, #00ff9d);
+    width: 0%;
+    transition: width 0.3s;
+}
+
+.resource-meter {
+    width: 100%;
+    height: 20px;
+    background: rgba(127, 219, 255, 0.1);
+    margin: 5px 0;
+    position: relative;
+}
+
+.resource-fill {
+    height: 100%;
+    background: #7fdbff;
+    width: 0%;
+    transition: width 0.3s;
+}
+
+.flow-message {
+    margin: 5px 0;
+    padding: 5px;
+    border-left: 2px solid #7fdbff;
+    font-family: monospace;
+}
+
+.priority-high { border-color: #ff4444; }
+.priority-medium { border-color: #ffbb33; }
+.priority-low { border-color: #00C851; }
+
+.status-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 5px;
+}
+
+.status-active { background: #00ff9d; }
+.status-waiting { background: #7fdbff; }
+.status-completed { background: #4a4; }
+.status-blocked { background: #ff4444; }
