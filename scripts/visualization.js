@@ -6,197 +6,238 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setClearColor(0x000811);
 document.getElementById('container').appendChild(renderer.domElement);
 
-// エージェントの基本設定
-const agentTypes = [
-    {
-        type: 'requirement',
-        position: [-4, 4, 0],
-        color: 0x7fdbff,
-        tasks: TaskType.REQUIREMENT
-    },
-    {
-        type: 'design',
-        position: [0, 4, 0],
-        color: 0x00ff9d,
-        tasks: TaskType.DESIGN
-    },
-    {
-        type: 'implementation',
-        position: [4, 4, 0],
-        color: 0xff3366,
-        tasks: TaskType.IMPLEMENTATION
-    },
-    {
-        type: 'review',
-        position: [-4, -4, 0],
-        color: 0xffbb33,
-        tasks: TaskType.REVIEW
-    },
-    {
-        type: 'test',
-        position: [0, -4, 0],
-        color: 0xb4a7d6,
-        tasks: TaskType.TEST
-    },
-    {
-        type: 'documentation',
-        position: [4, -4, 0],
-        color: 0x00ff9d,
-        tasks: TaskType.DOCUMENTATION
+// パイプラインの3D可視化
+class Pipeline3D {
+    constructor() {
+        this.group = new THREE.Group();
+        this.stages = new Map();
+        this.connections = new Map();
+        this.initialize();
     }
+
+    initialize() {
+        // ステージの位置を定義
+        const stagePositions = {
+            build: new THREE.Vector3(-4, 4, 0),
+            test: new THREE.Vector3(0, 4, 0),
+            deploy: new THREE.Vector3(4, 4, 0)
+        };
+
+        // 各ステージのノードを作成
+        Object.entries(stagePositions).forEach(([stage, position]) => {
+            const stageNode = this.createStageNode(stage);
+            stageNode.position.copy(position);
+            this.stages.set(stage, stageNode);
+            this.group.add(stageNode);
+        });
+
+        // ステージ間の接続を作成
+        this.createConnections(stagePositions);
+        
+        scene.add(this.group);
+    }
+
+    createStageNode(stage) {
+        const node = new THREE.Group();
+
+        // 中央の球体
+        const sphere = new THREE.Mesh(
+            new THREE.SphereGeometry(0.4, 32, 32),
+            new THREE.MeshPhongMaterial({
+                color: this.getStageColor(stage),
+                emissive: this.getStageColor(stage),
+                emissiveIntensity: 0.5,
+                transparent: true,
+                opacity: 0.8
+            })
+        );
+        node.add(sphere);
+
+        // 周囲の軌道リング
+        for (let i = 0; i < 3; i++) {
+            const ring = new THREE.Mesh(
+                new THREE.TorusGeometry(0.6 + i * 0.2, 0.02, 16, 100),
+                new THREE.MeshBasicMaterial({
+                    color: this.getStageColor(stage),
+                    transparent: true,
+                    opacity: 0.3 - i * 0.1
+                })
+            );
+            ring.rotation.x = Math.random() * Math.PI;
+            ring.rotation.y = Math.random() * Math.PI;
+            node.add(ring);
+        }
+
+        return node;
+    }
+
+    createConnections(positions) {
+        const stages = Object.keys(positions);
+        for (let i = 0; i < stages.length - 1; i++) {
+            const start = positions[stages[i]];
+            const end = positions[stages[i + 1]];
+            
+            // ベジェ曲線のコントロールポイント
+            const control = new THREE.Vector3(
+                (start.x + end.x) / 2,
+                start.y + 1,
+                start.z
+            );
+
+            const curve = new THREE.QuadraticBezierCurve3(start, control, end);
+            const points = curve.getPoints(50);
+            
+            // データフローライン
+            const geometry = new THREE.BufferGeometry().setFromPoints(points);
+            const material = new THREE.LineBasicMaterial({
+                color: 0x7fdbff,
+                transparent: true,
+                opacity: 0.3
+            });
+            const line = new THREE.Line(geometry, material);
+            this.connections.set(`${stages[i]}-${stages[i+1]}`, line);
+            this.group.add(line);
+
+            // フローパーティクル
+            this.createFlowParticles(curve, stages[i], stages[i+1]);
+        }
+    }
+
+    createFlowParticles(curve, fromStage, toStage) {
+        const particles = new THREE.Group();
+        const particleCount = 5;
+        
+        for (let i = 0; i < particleCount; i++) {
+            const particle = new THREE.Mesh(
+                new THREE.SphereGeometry(0.05, 8, 8),
+                new THREE.MeshBasicMaterial({
+                    color: this.getStageColor(fromStage),
+                    transparent: true,
+                    opacity: 0.6
+                })
+            );
+            
+            // パーティクルの初期位置をランダムに設定
+            const t = i / particleCount;
+            const position = curve.getPoint(t);
+            particle.position.copy(position);
+            
+            // アニメーション用のデータを付加
+            particle.userData = {
+                curve: curve,
+                speed: 0.001 + Math.random() * 0.001,
+                t: t
+            };
+            
+            particles.add(particle);
+        }
+        
+        this.group.add(particles);
+    }
+
+    getStageColor(stage) {
+        const colors = {
+            build: 0x7fdbff,
+            test: 0x00ff9d,
+            deploy: 0xffbb33
+        };
+        return colors[stage] || 0x7fdbff;
+    }
+
+    update(time) {
+        // ステージノードのアニメーション
+        this.stages.forEach((node, stage) => {
+            const isActive = taskManager.hasActiveTaskInStage(stage);
+            
+            // 中央球体のパルス効果
+            const sphere = node.children[0];
+            sphere.material.emissiveIntensity = isActive ? 
+                0.5 + Math.sin(time * 3) * 0.3 : 0.3;
+
+            // リングの回転
+            node.children.slice(1).forEach((ring, i) => {
+                ring.rotation.x += 0.01 * (i + 1);
+                ring.rotation.y += 0.005 * (i + 1);
+                ring.material.opacity = isActive ?
+                    0.3 - (i * 0.1) + Math.sin(time * 2) * 0.1 :
+                    0.2 - (i * 0.1);
+            });
+        });
+
+        // フローパーティクルのアニメーション
+        this.group.children.forEach(child => {
+            if (child instanceof THREE.Group) {
+                child.children.forEach(particle => {
+                    if (particle.userData.curve) {
+                        particle.userData.t += particle.userData.speed;
+                        if (particle.userData.t > 1) particle.userData.t = 0;
+                        
+                        const position = particle.userData.curve.getPoint(particle.userData.t);
+                        particle.position.copy(position);
+                    }
+                });
+            }
+        });
+    }
+}
+
+// エージェントの設定
+const agents = [
+    { type: 'requirement', position: [-6, 0, 0], color: 0x7fdbff },
+    { type: 'design', position: [-3, 0, 0], color: 0x00ff9d },
+    { type: 'implementation', position: [0, 0, 0], color: 0xff3366 },
+    { type: 'test', position: [3, 0, 0], color: 0xb4a7d6 },
+    { type: 'documentation', position: [6, 0, 0], color: 0xffbb33 }
 ];
 
-// ホログラム効果のシェーダー
-const hologramShader = {
-    vertexShader: `
-        varying vec2 vUv;
-        varying vec3 vPosition;
-        void main() {
-            vUv = uv;
-            vPosition = position;
-            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-        }
-    `,
-    fragmentShader: `
-        uniform float time;
-        uniform vec3 baseColor;
-        varying vec2 vUv;
-        varying vec3 vPosition;
-
-        void main() {
-            float scanline = sin(vPosition.y * 50.0 + time * 5.0) * 0.1 + 0.9;
-            float edge = sin(time * 2.0) * 0.1 + 0.9;
-            vec3 color = baseColor * scanline * edge;
-            float alpha = 0.7 + 0.3 * sin(vUv.y * 50.0 + time * 3.0);
-            gl_FragColor = vec4(color, alpha);
-        }
-    `
-};
-
 // エージェントメッシュの作成
-function createAgentMesh(agentType) {
+const agentMeshes = agents.map(agent => {
     const group = new THREE.Group();
 
-    // 中心の球体
+    // 中心球体
     const sphereGeometry = new THREE.IcosahedronGeometry(0.5, 2);
-    const sphereMaterial = new THREE.ShaderMaterial({
-        uniforms: {
-            time: { value: 0 },
-            baseColor: { value: new THREE.Color(agentType.color) }
-        },
-        vertexShader: hologramShader.vertexShader,
-        fragmentShader: hologramShader.fragmentShader,
+    const sphereMaterial = new THREE.MeshPhongMaterial({
+        color: agent.color,
+        emissive: agent.color,
+        emissiveIntensity: 0.5,
         transparent: true,
-        side: THREE.DoubleSide
+        opacity: 0.8
     });
     const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
     group.add(sphere);
 
-    // 回転リング
-    for (let i = 0; i < 3; i++) {
-        const ringGeometry = new THREE.TorusGeometry(0.8 + i * 0.2, 0.02, 16, 100);
-        const ringMaterial = new THREE.MeshBasicMaterial({
-            color: agentType.color,
-            transparent: true,
-            opacity: 0.3 - i * 0.1
-        });
-        const ring = new THREE.Mesh(ringGeometry, ringMaterial);
+    // 軌道リング
+    const ringCount = 3;
+    for (let i = 0; i < ringCount; i++) {
+        const ring = new THREE.Mesh(
+            new THREE.TorusGeometry(0.7 + i * 0.2, 0.02, 16, 100),
+            new THREE.MeshBasicMaterial({
+                color: agent.color,
+                transparent: true,
+                opacity: 0.3 - i * 0.1
+            })
+        );
         ring.rotation.x = Math.random() * Math.PI;
         ring.rotation.y = Math.random() * Math.PI;
         group.add(ring);
     }
 
-    // 情報パネル
-    const panelGeometry = new THREE.PlaneGeometry(1.5, 0.5);
-    const panelMaterial = new THREE.MeshBasicMaterial({
-        color: agentType.color,
-        transparent: true,
-        opacity: 0.2,
-        side: THREE.DoubleSide
-    });
-    const panel = new THREE.Mesh(panelGeometry, panelMaterial);
-    panel.position.z = 1;
-    group.add(panel);
-
-    group.position.set(...agentType.position);
+    group.position.set(...agent.position);
     scene.add(group);
-
+    
     return {
         group,
-        materials: [sphereMaterial, ...group.children.slice(1).map(child => child.material)],
-        type: agentType.type
+        type: agent.type,
+        materials: [sphereMaterial, ...group.children.slice(1).map(c => c.material)]
     };
-}
-
-// エージェントの生成
-const agents = agentTypes.map(createAgentMesh);
-
-// データフローラインの作成
-const dataFlowLines = [];
-agentTypes.forEach((agent1, i) => {
-    agentTypes.forEach((agent2, j) => {
-        if (i < j) {
-            const geometry = new THREE.BufferGeometry();
-            const points = [
-                new THREE.Vector3(...agent1.position),
-                new THREE.Vector3(...agent2.position)
-            ];
-            geometry.setFromPoints(points);
-
-            const material = new THREE.LineDashedMaterial({
-                color: 0x7fdbff,
-                dashSize: 0.3,
-                gapSize: 0.1,
-                transparent: true,
-                opacity: 0.3
-            });
-
-            const line = new THREE.Line(geometry, material);
-            line.computeLineDistances();
-            scene.add(line);
-            dataFlowLines.push({ line, material });
-        }
-    });
 });
 
-// パーティクルシステム
-function createParticleSystem() {
-    const particleCount = 1000;
-    const geometry = new THREE.BufferGeometry();
-    const positions = new Float32Array(particleCount * 3);
-    const colors = new Float32Array(particleCount * 3);
-
-    for (let i = 0; i < particleCount * 3; i += 3) {
-        positions[i] = (Math.random() - 0.5) * 20;
-        positions[i + 1] = (Math.random() - 0.5) * 20;
-        positions[i + 2] = (Math.random() - 0.5) * 20;
-
-        const color = new THREE.Color(0x7fdbff);
-        color.setHSL(Math.random(), 0.8, 0.8);
-        colors[i] = color.r;
-        colors[i + 1] = color.g;
-        colors[i + 2] = color.b;
-    }
-
-    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-
-    const material = new THREE.PointsMaterial({
-        size: 0.1,
-        vertexColors: true,
-        transparent: true,
-        opacity: 0.6
-    });
-
-    return new THREE.Points(geometry, material);
-}
-
-const particles = createParticleSystem();
-scene.add(particles);
+// パイプラインの初期化
+const pipeline3D = new Pipeline3D();
 
 // ライティング
 const light = new THREE.PointLight(0x7fdbff, 1, 100);
-light.position.set(0, 0, 20);
+light.position.set(0, 10, 20);
 scene.add(light);
 scene.add(new THREE.AmbientLight(0x404040));
 
@@ -210,48 +251,26 @@ function animate() {
     time += 0.01;
 
     // エージェントのアニメーション
-    agents.forEach(agent => {
-        // シェーダーの時間更新
-        agent.materials[0].uniforms.time.value = time;
-
-        // アクティブ状態の確認
-        const isActive = Array.from(taskManager.tasks.values()).some(task =>
-            task.type === agent.type && 
-            (task.status === TaskStatus.IN_PROGRESS || 
-             task.status === TaskStatus.ANALYZING ||
-             task.status === TaskStatus.IN_REVIEW)
-        );
-
-        // 回転速度とエフェクト強度の調整
+    agentMeshes.forEach(({ group, type, materials }) => {
+        const isActive = taskManager.hasActiveTaskOfType(type);
         const rotationSpeed = isActive ? 0.02 : 0.005;
-        agent.group.rotation.y += rotationSpeed;
+        
+        group.rotation.y += rotationSpeed;
+        
+        materials[0].emissiveIntensity = isActive ? 
+            0.5 + Math.sin(time * 3) * 0.3 : 0.3;
 
-        // リングのアニメーション
-        for (let i = 1; i <= 3; i++) {
-            const ring = agent.group.children[i];
-            ring.rotation.x += rotationSpeed * (i * 0.5);
-            ring.rotation.y += rotationSpeed * (i * 0.3);
-            agent.materials[i].opacity = 0.3 + Math.sin(time * 2 + i) * 0.1;
-        }
+        group.children.slice(1).forEach((ring, i) => {
+            ring.rotation.x += rotationSpeed * (i + 1) * 0.5;
+            ring.rotation.y += rotationSpeed * (i + 1) * 0.3;
+            materials[i + 1].opacity = isActive ?
+                0.3 - (i * 0.1) + Math.sin(time * 2) * 0.1 :
+                0.2 - (i * 0.1);
+        });
     });
 
-    // データフローラインのアニメーション
-    dataFlowLines.forEach(({ material }) => {
-        material.dashOffset -= 0.1;
-        material.opacity = 0.3 + Math.sin(time * 2) * 0.1;
-    });
-
-    // パーティクルのアニメーション
-    const positions = particles.geometry.attributes.position.array;
-    for (let i = 0; i < positions.length; i += 3) {
-        positions[i + 1] += Math.sin(time + positions[i]) * 0.01;
-        positions[i] += Math.cos(time + positions[i + 1]) * 0.01;
-
-        if (Math.abs(positions[i]) > 10) positions[i] *= 0.95;
-        if (Math.abs(positions[i + 1]) > 10) positions[i + 1] *= 0.95;
-        if (Math.abs(positions[i + 2]) > 10) positions[i + 2] *= 0.95;
-    }
-    particles.geometry.attributes.position.needsUpdate = true;
+    // パイプラインのアニメーション
+    pipeline3D.update(time);
 
     // カメラの動き
     camera.position.x = Math.sin(time * 0.1) * 2;
